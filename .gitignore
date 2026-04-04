@@ -27,3 +27,5 @@ data/bus/
 *.njsproj
 *.sln
 *.sw?
+
+tmp

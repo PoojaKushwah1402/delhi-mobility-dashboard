@@ -132,7 +132,7 @@ export default function ZoneDetail({ zone, onClose, onAskAI }) {
           >
             <AlertTriangle size={14} color="var(--danger)" />
             <span style={{ fontSize: 11, fontWeight: 500, color: '#ef4444' }}>
-              LAST-MILE GAP ZONE
+              {zone.score <= 20 ? 'CRITICAL GAP ZONE — NO TRANSIT' : zone.score <= 35 ? 'SEVERE GAP ZONE' : 'GAP ZONE — POOR CONNECTIVITY'}
             </span>
           </div>
         )}

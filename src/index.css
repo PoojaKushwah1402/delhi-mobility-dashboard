@@ -43,6 +43,7 @@ html, body, #root {
 
 .mapboxgl-ctrl-attrib { display: none !important; }
 .mapboxgl-ctrl-logo { display: none !important; }
+.mapboxgl-ctrl-bottom-right { bottom: 56px !important; right: 4px !important; }
 
 /* Custom Mapbox popup styling */
 .custom-popup .mapboxgl-popup-content {
