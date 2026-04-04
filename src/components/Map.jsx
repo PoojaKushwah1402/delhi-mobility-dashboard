@@ -747,7 +747,7 @@ export default function Map({
             map.on("mousemove", "live-buses-layer", (e) => {
                 map.getCanvas().style.cursor = "pointer";
                 const f = e.features[0].properties;
-                tooltipRef.current.innerHTML = `<span style="font-family:'IBM Plex Mono',monospace;font-weight:600;color:#3b82f6">Route ${f.route}</span>`;
+                tooltipRef.current.innerHTML = `<span style="font-family:'IBM Plex Mono',monospace;font-weight:600;color:#3b82f6">Bus #${f.id}</span>`;
                 tooltipRef.current.style.display = "block";
                 tooltipRef.current.style.left = e.point.x + "px";
                 tooltipRef.current.style.top = e.point.y + "px";
@@ -775,14 +775,17 @@ export default function Map({
                         `
             <div style="font-family:'Outfit',sans-serif;color:#d4dce8;font-size:11px">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-                <div style="width:8px;height:5px;background:#3b82f6;border-radius:1px"></div>
-                <span style="font-size:14px;font-weight:600">Route ${f.route}</span>
+                <div style="width:8px;height:8px;border-radius:50%;background:#3b82f6"></div>
+                <span style="font-size:13px;font-weight:600">Bus #${f.id}</span>
               </div>
-              ${f.direction ? `<div style="color:#6b7a94;margin-bottom:4px">${f.direction}</div>` : ""}
-              <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a3050">
+              <div style="padding-top:6px;border-top:1px solid #2a3050;display:flex;flex-direction:column;gap:3px">
+                ${f.route && f.route !== '—' ? `<div style="display:flex;justify-content:space-between"><span style="color:#6b7a94">Route ID</span><span style="font-family:'IBM Plex Mono',monospace">${f.route}</span></div>` : ''}
+                ${f.bearing ? `<div style="display:flex;justify-content:space-between"><span style="color:#6b7a94">Heading</span><span style="font-family:'IBM Plex Mono',monospace">${Math.round(f.bearing)}°</span></div>` : ''}
+              </div>
+              <div style="margin-top:6px;padding-top:6px;border-top:1px solid #2a3050">
                 <div style="display:flex;align-items:center;gap:4px">
                   <div style="width:6px;height:6px;border-radius:50%;background:${isSim ? "#f59e0b" : "#16a34a"}"></div>
-                  <span style="font-size:10px;color:${isSim ? "#f59e0b" : "#16a34a"};letter-spacing:0.05em;text-transform:uppercase;font-weight:500">${isSim ? "Simulated Position" : "Live GPS Position"}</span>
+                  <span style="font-size:10px;color:${isSim ? "#f59e0b" : "#16a34a"};letter-spacing:0.05em;text-transform:uppercase;font-weight:500">${isSim ? "Simulated" : "Live GPS"}</span>
                 </div>
               </div>
             </div>
