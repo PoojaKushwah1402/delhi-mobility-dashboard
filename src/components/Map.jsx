@@ -74,34 +74,21 @@ function haversine(lat1, lng1, lat2, lng2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Load bus icon as SVG → Image (most reliable for Mapbox GL)
+// Minimal navigation dot — small filled circle with directional notch
 function loadBusIcon(map) {
     return new Promise((resolve) => {
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="36" viewBox="0 0 64 36">
-      <rect x="4" y="2" width="56" height="24" rx="6" fill="#3b82f6"/>
-      <rect x="4" y="2" width="56" height="4" rx="3" fill="#60a5fa" opacity="0.5"/>
-      <rect x="10" y="8" width="8" height="10" rx="1.5" fill="#bfdbfe"/>
-      <rect x="22" y="8" width="8" height="10" rx="1.5" fill="#bfdbfe"/>
-      <rect x="34" y="8" width="8" height="10" rx="1.5" fill="#bfdbfe"/>
-      <rect x="48" y="7" width="10" height="12" rx="2" fill="#93c5fd"/>
-      <circle cx="16" cy="28" r="5" fill="#1e293b"/>
-      <circle cx="16" cy="28" r="2.5" fill="#475569"/>
-      <circle cx="48" cy="28" r="5" fill="#1e293b"/>
-      <circle cx="48" cy="28" r="2.5" fill="#475569"/>
-      <rect x="2" y="24" width="4" height="3" rx="1" fill="#ef4444" opacity="0.9"/>
-      <rect x="58" y="24" width="4" height="3" rx="1" fill="#fbbf24" opacity="0.9"/>
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="5" fill="#3b82f6"/>
+      <circle cx="8" cy="8" r="3.5" fill="#60a5fa"/>
+      <path d="M8 2 L10 6 L6 6 Z" fill="#ffffff" opacity="0.9"/>
     </svg>`;
 
-        const img = new Image(64, 36);
+        const img = new Image(16, 16);
         img.onload = () => {
-            map.addImage("bus-icon", img, {pixelRatio: 2});
-            console.log("[Map] Bus SVG icon loaded");
+            map.addImage("bus-icon", img, { pixelRatio: 1 });
             resolve(true);
         };
-        img.onerror = () => {
-            console.warn("[Map] Bus icon load failed");
-            resolve(false);
-        };
+        img.onerror = () => resolve(false);
         img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
     });
 }
@@ -740,13 +727,13 @@ export default function Map({
                         ["linear"],
                         ["zoom"],
                         9,
-                        0.35,
+                        0.6,
                         11,
-                        0.5,
+                        0.8,
                         13,
-                        0.7,
+                        1,
                         16,
-                        1
+                        1.4
                     ],
                     "icon-rotate": ["get", "bearing"],
                     "icon-rotation-alignment": "map",
@@ -862,15 +849,15 @@ export default function Map({
             return toGeoJSON(positions, false);
         }
 
+        let consecutiveFailures = 0;
+
         async function poll() {
             if (cancelled) return;
             const realData = await fetchRealBuses();
             if (realData && realData.length > 10) {
-                // Switch to live
+                consecutiveFailures = 0;
                 if (!isLive) {
-                    console.log(
-                        `[Map] Switching to LIVE — ${realData.length} buses`
-                    );
+                    console.log(`[Map] Switching to LIVE — ${realData.length} buses`);
                     isLive = true;
                     prevLivePositions = realData;
                     targetLivePositions = realData;
@@ -879,14 +866,18 @@ export default function Map({
                     targetLivePositions = realData;
                 }
                 liveInterpolationStart = performance.now();
-                onBusUpdate(realData.length, false); // false = not simulated
+                onBusUpdate(realData.length, false);
             } else {
-                if (isLive)
-                    console.log(
-                        "[Map] Lost live data, falling back to simulation"
-                    );
-                isLive = false;
-                onBusUpdate(NUM_SIM, true); // true = simulated
+                consecutiveFailures++;
+                // Only fall back to simulation after 3 consecutive failures
+                // This prevents buses from vanishing on a single bad poll
+                if (consecutiveFailures >= 3) {
+                    if (isLive) console.log("[Map] 3 failures, falling back to simulation");
+                    isLive = false;
+                    onBusUpdate(NUM_SIM, true);
+                } else if (isLive) {
+                    console.log(`[Map] Poll failed (${consecutiveFailures}/3), keeping last live data`);
+                }
             }
         }
 
