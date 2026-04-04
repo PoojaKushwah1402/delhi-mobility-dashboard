@@ -120,7 +120,6 @@ export default function Map({
     const [mapLoaded, setMapLoaded] = useState(false);
     const tooltipRef = useRef(null);
     const popupRef = useRef(null);
-    const busAnimRef = useRef(null);
 
     // Initialize map
     useEffect(() => {
@@ -347,15 +346,9 @@ export default function Map({
                 }
             });
 
-            // Hover — scale up
+            // Hover — tooltip only (no paint mutation to avoid perf issues)
             map.on("mousemove", "metro-stations", (e) => {
                 map.getCanvas().style.cursor = "pointer";
-                map.setPaintProperty("metro-stations", "circle-radius", [
-                    "case",
-                    ["==", ["get", "name"], e.features[0].properties.name],
-                    ["interpolate", ["linear"], ["zoom"], 9, 6, 14, 9],
-                    ["interpolate", ["linear"], ["zoom"], 9, 4, 14, 7]
-                ]);
                 const f = e.features[0].properties;
                 const lines = JSON.parse(f.lines);
                 const lineDots = lines
@@ -386,15 +379,6 @@ export default function Map({
             map.on("mouseleave", "metro-stations", () => {
                 map.getCanvas().style.cursor = "";
                 tooltipRef.current.style.display = "none";
-                map.setPaintProperty("metro-stations", "circle-radius", [
-                    "interpolate",
-                    ["linear"],
-                    ["zoom"],
-                    9,
-                    4,
-                    14,
-                    7
-                ]);
             });
 
             // Click — rich popup
@@ -906,8 +890,9 @@ export default function Map({
             }
         }
 
-        function animate(now) {
+        function tick() {
             if (cancelled) return;
+            const now = performance.now();
 
             if (isLive) {
                 const elapsed = now - liveInterpolationStart;
@@ -918,7 +903,6 @@ export default function Map({
                     map.getSource("live-buses").setData(geo);
                 }
             } else {
-                // Simulation fallback
                 const elapsed = now - simInterpolationStart;
                 let t = Math.min(elapsed / POLL_INTERVAL, 1);
                 t = t * t * (3 - 2 * t);
@@ -949,19 +933,17 @@ export default function Map({
                     if (!isLive) onBusUpdate(NUM_SIM, true);
                 }
             }
-
-            busAnimRef.current = requestAnimationFrame(animate);
         }
 
-        // Kick off: poll immediately, then every 30s
+        // Kick off: poll immediately, then update at 2fps (not 60fps)
         poll();
         const pollInterval = setInterval(poll, POLL_INTERVAL);
-        busAnimRef.current = requestAnimationFrame(animate);
+        const tickInterval = setInterval(tick, 500);
 
         return () => {
             cancelled = true;
             clearInterval(pollInterval);
-            cancelAnimationFrame(busAnimRef.current);
+            clearInterval(tickInterval);
         };
     }, [mapLoaded]);
 
