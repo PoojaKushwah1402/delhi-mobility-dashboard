@@ -144,7 +144,6 @@ export default function Map({
         map.on("load", async () => {
             mapRef.current = map;
             await loadBusIcon(map);
-            console.log("[Map] Map loaded, setting mapLoaded=true");
             setMapLoaded(true);
         });
 
@@ -153,6 +152,24 @@ export default function Map({
             mapRef.current = null;
         };
     }, []);
+
+    // Close ZoneDetail when clicking empty map area
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !mapLoaded) return;
+
+        function handleMapClick(e) {
+            const layers = ['hex-fill', 'metro-stations', 'bus-stops-layer', 'live-buses-layer'];
+            const features = map.queryRenderedFeatures(e.point, { layers: layers.filter(l => map.getLayer(l)) });
+            if (features.length === 0) {
+                onZoneSelect(null);
+                if (popupRef.current) popupRef.current.remove();
+            }
+        }
+
+        map.on('click', handleMapClick);
+        return () => map.off('click', handleMapClick);
+    }, [mapLoaded, onZoneSelect]);
 
     // ===== HEXAGON LAYER =====
     useEffect(() => {
@@ -222,6 +239,7 @@ export default function Map({
 
             // Hex hover — brighten + tooltip
             map.on("mousemove", "hex-fill", (e) => {
+                if (!e.features || e.features.length === 0) return;
                 map.getCanvas().style.cursor = "pointer";
                 // Brighten hovered hex
                 map.setPaintProperty("hex-fill", "fill-opacity", [
@@ -275,8 +293,18 @@ export default function Map({
             map.setPaintProperty("hex-border", "line-width", 1);
             map.setPaintProperty("hex-border", "line-opacity", 0.7);
             map.setPaintProperty("hex-border", "line-color", ["get", "color"]);
+            // Restore layers that gap-only view hid — respect their individual toggle state
+            if (map.getLayer("bus-stops-layer")) {
+                map.setLayoutProperty("bus-stops-layer", "visibility", layers.busStops ? "visible" : "none");
+            }
+            ["live-buses-layer", "live-buses-glow"].forEach((id) => {
+                if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", layers.liveBuses ? "visible" : "none");
+            });
+            if (map.getLayer("metro-stations")) {
+                map.setLayoutProperty("metro-stations", "visibility", layers.metro ? "visible" : "none");
+            }
         }
-    }, [mapLoaded, hexagons, layers.hexagons, layers.gapOnly]);
+    }, [mapLoaded, hexagons, layers.hexagons, layers.gapOnly, layers.busStops, layers.liveBuses, layers.metro]);
 
     // Selected hex highlight
     useEffect(() => {
@@ -335,6 +363,7 @@ export default function Map({
 
             // Hover — tooltip only (no paint mutation to avoid perf issues)
             map.on("mousemove", "metro-stations", (e) => {
+                if (!e.features || e.features.length === 0) return;
                 map.getCanvas().style.cursor = "pointer";
                 const f = e.features[0].properties;
                 const lines = JSON.parse(f.lines);
@@ -370,6 +399,7 @@ export default function Map({
 
             // Click — rich popup
             map.on("click", "metro-stations", (e) => {
+                if (!e.features || e.features.length === 0) return;
                 if (e.originalEvent) e.originalEvent.stopPropagation();
                 const f = e.features[0].properties;
                 const coords = e.features[0].geometry.coordinates;
@@ -551,6 +581,7 @@ export default function Map({
 
             // Hover — brighten
             map.on("mousemove", "bus-stops-layer", (e) => {
+                if (!e.features || e.features.length === 0) return;
                 map.getCanvas().style.cursor = "pointer";
                 tooltipRef.current.innerHTML = `<strong>${e.features[0].properties.name}</strong>`;
                 tooltipRef.current.style.display = "block";
@@ -564,6 +595,7 @@ export default function Map({
 
             // Click — popup with stop details
             map.on("click", "bus-stops-layer", (e) => {
+                if (!e.features || e.features.length === 0) return;
                 if (e.originalEvent) e.originalEvent.stopPropagation();
                 const f = e.features[0].properties;
                 const coords = e.features[0].geometry.coordinates;
@@ -745,6 +777,7 @@ export default function Map({
 
             // Hover
             map.on("mousemove", "live-buses-layer", (e) => {
+                if (!e.features || e.features.length === 0) return;
                 map.getCanvas().style.cursor = "pointer";
                 const f = e.features[0].properties;
                 tooltipRef.current.innerHTML = `<span style="font-family:'IBM Plex Mono',monospace;font-weight:600;color:#3b82f6">Bus #${f.id}</span>`;
@@ -759,6 +792,7 @@ export default function Map({
 
             // Click
             map.on("click", "live-buses-layer", (e) => {
+                if (!e.features || e.features.length === 0) return;
                 if (e.originalEvent) e.originalEvent.stopPropagation();
                 const f = e.features[0].properties;
                 const coords = e.features[0].geometry.coordinates;
@@ -805,7 +839,7 @@ export default function Map({
                     throw new Error("No vehicles");
                 return data.vehicles;
             } catch (err) {
-                console.warn("[Map] Real bus API failed:", err.message);
+                // silently handle API failure
                 return null;
             }
         }
@@ -860,7 +894,6 @@ export default function Map({
             if (realData && realData.length > 10) {
                 consecutiveFailures = 0;
                 if (!isLive) {
-                    console.log(`[Map] Switching to LIVE — ${realData.length} buses`);
                     isLive = true;
                     prevLivePositions = realData;
                     targetLivePositions = realData;
@@ -875,11 +908,8 @@ export default function Map({
                 // Only fall back to simulation after 3 consecutive failures
                 // This prevents buses from vanishing on a single bad poll
                 if (consecutiveFailures >= 3) {
-                    if (isLive) console.log("[Map] 3 failures, falling back to simulation");
                     isLive = false;
                     onBusUpdate(NUM_SIM, true);
-                } else if (isLive) {
-                    console.log(`[Map] Poll failed (${consecutiveFailures}/3), keeping last live data`);
                 }
             }
         }

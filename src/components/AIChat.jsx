@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, User } from 'lucide-react';
 import { isTransitQuery, buildSystemPrompt, REJECTION_MSG } from '../utils/ai-context';
+import { findCacheMatch, cacheAnswer } from '../utils/ai-cache';
 
 export default function AIChat({ hexagons, selectedZone, onClose }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Namaste! Main Delhi Mobility AI hoon. Delhi NCR ke transit network, last-mile connectivity, aur e-rickshaw deployment ke baare mein kuch bhi poochiye. 🚇',
+      content: 'Delhi Mobility AI — Ask me about transit connectivity, gap zones, e-rickshaw deployment, or any zone analysis. I support English and Hindi.',
     },
   ]);
   const [input, setInput] = useState('');
@@ -36,52 +37,72 @@ export default function AIChat({ hexagons, selectedZone, onClose }) {
       return;
     }
 
+    // Check cache first
+    const cached = findCacheMatch(text);
+    if (cached) {
+      setMessages(prev => [...prev, { role: 'assistant', content: cached }]);
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-      if (!apiKey || apiKey === 'sk-xxx') {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: 'API key not configured. Please set VITE_ANTHROPIC_API_KEY in your .env file to enable AI responses.',
+          content: 'AI API key not configured. Please set VITE_GEMINI_API_KEY in your .env file.',
         }]);
         setLoading(false);
         return;
       }
 
       const systemPrompt = buildSystemPrompt(hexagons, selectedZone);
-      const conversationHistory = [...messages.filter(m => m.role !== 'system'), userMsg].map(m => ({
-        role: m.role,
-        content: m.content,
-      }));
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: conversationHistory,
-        }),
-      });
+      // Build conversation for Gemini
+      const contents = [];
+
+      // Add conversation history
+      const history = [...messages.filter(m => m.role !== 'system'), userMsg];
+      for (const msg of history) {
+        contents.push({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }],
+        });
+      }
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents,
+            generationConfig: {
+              maxOutputTokens: 1000,
+              temperature: 0.7,
+            },
+          }),
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error?.message || `API error: ${response.status}`);
       }
 
       const data = await response.json();
-      const assistantContent = data.content?.[0]?.text || 'Sorry, I could not generate a response.';
+      const assistantContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+
+      // Cache the response
+      cacheAnswer(text, assistantContent);
+
       setMessages(prev => [...prev, { role: 'assistant', content: assistantContent }]);
     } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `Error: ${err.message}. Please check your API key and try again.`,
+        content: `Error: ${err.message}`,
       }]);
     } finally {
       setLoading(false);
@@ -154,6 +175,36 @@ export default function AIChat({ hexagons, selectedZone, onClose }) {
           {messages.map((msg, i) => (
             <ChatMessage key={i} message={msg} index={i} />
           ))}
+          {messages.length === 1 && !loading && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+              {[
+                'Which zones have the worst connectivity?',
+                'Where should I deploy e-rickshaws first?',
+                'Analyze the Dwarka corridor',
+                'Top 10 underserved metro stations',
+              ].map((q) => (
+                <button
+                  key={q}
+                  onClick={() => { setInput(q); }}
+                  style={{
+                    padding: '5px 10px',
+                    background: 'rgba(6, 182, 212, 0.06)',
+                    border: '1px solid rgba(6, 182, 212, 0.15)',
+                    borderRadius: 4,
+                    color: 'var(--accent)',
+                    fontSize: 10,
+                    fontFamily: 'var(--font-heading)',
+                    cursor: 'pointer',
+                    transition: 'all 150ms',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(6, 182, 212, 0.12)'; e.currentTarget.style.borderColor = 'rgba(6, 182, 212, 0.3)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(6, 182, 212, 0.06)'; e.currentTarget.style.borderColor = 'rgba(6, 182, 212, 0.15)'; }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
           {loading && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
               <Bot size={14} color="var(--accent)" style={{ marginTop: 2, flexShrink: 0 }} />
@@ -192,7 +243,7 @@ export default function AIChat({ hexagons, selectedZone, onClose }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder="Ask about Delhi transit..."
+              placeholder="Ask about Delhi's transit network (English or Hindi)"
               style={{
                 flex: 1,
                 background: 'transparent',
