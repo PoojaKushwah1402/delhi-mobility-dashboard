@@ -47,18 +47,17 @@ const PRE_CACHED = {
   "compare dwarka vs noida": `**Dwarka vs Noida — Connectivity Analysis:**
 
 **Dwarka (Blue Line + Grey Line):**
-• Served by Blue Line (Dwarka Sec-21 to Dwarka) and Grey Line extension to Najafgarh
-• Moderate bus connectivity in inner sectors — average zone score 45-55/100 in core areas
-• Connectivity drops sharply at periphery (Najafgarh, Dhansa corridor)
-• Grey Line stations have limited feeder coverage
+• **Excellent connectivity** — most sectors score 80-100/100
+• Dwarka Sector 8, 13, 21: Score 100/100 with 11-13 bus stops each
+• Grey Line extension (Najafgarh, Dhansa Bus Stand) is well-served — scores 93-100
+• Notable exception: Dwarka station itself scores only 42/100 (1 bus stop) — a localized gap
 
 **Noida (Blue Line + Aqua Line):**
-• Blue Line serves the main corridor (Noida Sec-15 to Electronic City)
-• Aqua Line covers Sectors 51-142 — however, most stations have zero bus stops
-• 21 Aqua Line stations, majority scoring 30/100
-• Vaishali (Blue Line terminus) has 0 bus stops — a critical gap
+• **Severe connectivity gaps** despite two metro lines
+• Aqua Line: All 21 stations score 30/100 with **zero bus stops** — Sectors 50, 51, 76, 81, 83, 101, 137-148, NSEZ, Knowledge Park, Pari Chowk, Alpha 1, Delta 1, GNIDA Office
+• Vaishali (Blue Line terminus): Score 30/100, 0 bus stops — a critical gap
 
-**Assessment:** Noida exhibits significantly worse last-mile connectivity despite having two metro lines. The Aqua Line corridor (Sectors 50-142) is a rapidly developing area with virtually no bus feeder service — representing a high-value deployment opportunity for e-rickshaw operators.`,
+**Assessment:** Noida exhibits **dramatically worse** last-mile connectivity than Dwarka. The Aqua Line corridor has zero bus feeder service across all 21 stations — representing the single largest gap zone cluster in the network. Dwarka, by contrast, is one of the best-connected corridors in Delhi NCR. **Noida is the priority deployment target.**`,
 
   "how many gap zones are there": `There are **301 gap zones** out of 1,219 total analyzed zones in Delhi NCR — representing **25% of the transit network** with connectivity scores below 50/100.
 
@@ -74,16 +73,15 @@ const PRE_CACHED = {
 Laxmi Nagar is one of East Delhi's most densely populated commercial hubs, served by the Blue Line metro.
 
 **Connectivity profile:**
-• Metro: Blue Line station with high daily ridership
-• Bus coverage: Moderate — main roads (Vikas Marg, Laxmi Nagar Main Road) have bus service
-• Surrounding areas (Shakarpur, Geeta Colony) have reasonable coverage on arterial roads
-• However, interior residential lanes within 1-2km radius remain underserved
+• **Connectivity score: 99/100** — one of the best-connected metro stations in Delhi
+• 8 bus stops within the zone with strong route diversity
+• Excellent feeder coverage on Vikas Marg, Laxmi Nagar Main Road, and surrounding arterials
+• High bus frequency makes this zone a connectivity success story
 
-**Adjacent gap zones:**
-• Yamuna Bank (Blue Line interchange) — Score 30/100, 0 bus stops. Critical gap despite being a major interchange station.
-• Trans-Yamuna residential zones — multiple zones scoring below 40
+**Adjacent gap on the same line:**
+• Yamuna Bank (Blue Line interchange) — Score 30/100, 0 bus stops. Despite being a major interchange one stop away, it has zero feeder connectivity.
 
-**Deployment recommendation:** Medium-high priority. The station handles significant commuter volume, and while main corridors have bus access, the residential interiors represent a consistent last-mile gap. Recommended: 10-15 e-rickshaws covering interior lanes within a 2km radius.`,
+**Deployment recommendation:** **Low priority** for e-rickshaw deployment — Laxmi Nagar is already well-served by buses. Resources would be better directed at adjacent Yamuna Bank or other Blue Line gap stations. The contrast between Laxmi Nagar (Score 99) and Yamuna Bank (Score 30) one stop away illustrates how unevenly distributed Delhi's last-mile connectivity is.`,
 
   "best areas for e-rickshaw business": `**E-Rickshaw Deployment Analysis — Revenue-Optimized Rankings:**
 
@@ -140,19 +138,22 @@ Laxmi Nagar is one of East Delhi's most densely populated commercial hubs, serve
 
   "analyze dwarka corridor": `**Dwarka Corridor — Connectivity Analysis:**
 
-The Dwarka corridor is served by the Blue Line metro (Dwarka Sec-21 to Dwarka) and the Grey Line extension toward Najafgarh.
+The Dwarka corridor is one of the **best-connected** areas in Delhi NCR, served by the Blue Line metro (Dwarka Sec-21 to Dwarka Mor) and the Grey Line extension to Dhansa Bus Stand.
 
 **Connectivity profile:**
-• Inner sectors (Sec 1-12) have moderate bus coverage with average zone scores of 45-55/100
-• The Blue Line stations connect Dwarka to central Delhi efficiently — 30 minute commute to Rajiv Chowk
-• Grey Line extension (Dwarka → Najafgarh → Dhansa Bus Stand) is recently operational but feeder bus connectivity is sparse
+• **Excellent overall scores** — most Dwarka sector stations score 80-100/100
+• Dwarka Sector-13: Score 100/100, 11 bus stops in zone
+• Dwarka Sector-8: Score 100/100, 13 bus stops
+• Dwarka Sector-21 (Blue + Airport Express interchange): Score 100/100, 12 bus stops
+• Dwarka Mor: Score 96/100, 7 bus stops
 
-**Gap zones identified:**
-• Outer Dwarka sectors (Sec 18-25) score below 50/100
-• Najafgarh peripheral zones — score as low as 25/100, transit-starved
-• Dhansa Bus Stand area — minimal feeder connectivity
+**Grey Line extension:**
+• Najafgarh: Score 93/100, 6 bus stops — well-served
+• Dhansa Bus Stand: Score 100/100, 12 bus stops — excellent terminus connectivity
 
-**Recommendation:** Deploy e-rickshaws at Dwarka Sec-21 (terminus interchange), Najafgarh, and Dhansa Bus Stand. The Grey Line extension serves a rapidly developing residential catchment with very limited bus service — high impact opportunity for last-mile coverage.`,
+**Notable exception:** Dwarka station itself (Blue + Grey interchange) scores only 42/100 with 1 bus stop — a surprising gap in an otherwise well-connected corridor.
+
+**Recommendation:** Dwarka is NOT a priority deployment area for e-rickshaws — connectivity is already strong. Focus instead on the underserved Dwarka station hex zone, or redirect resources to Gurgaon's Yellow Line corridor (Huda City Centre, IFFCO Chowk) which have severe last-mile gaps.`,
 
   "top 10 underserved metro stations": `**Top 10 Underserved Metro Stations (Score 30/100, 0 bus stops in zone):**
 
