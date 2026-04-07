@@ -72,74 +72,162 @@ export default function AIChat({ hexagons, selectedZone, onClose }) {
       const requestBody = {
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents,
-        generationConfig: { maxOutputTokens: 1000, temperature: 0.7 },
+        generationConfig: { maxOutputTokens: 250, temperature: 0.7 },
       };
 
-      // Try models in order, with one retry on 429/503
-      const MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-001', 'gemini-flash-latest'];
-
-      async function callGemini(model) {
-        return fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-          }
-        );
-      }
-
-      let response = null;
-      let lastError = null;
-      let showedRetryMsg = false;
-
-      outer: for (const model of MODELS) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            response = await callGemini(model);
-            if (response.ok) break outer;
-
-            if (response.status === 429 || response.status === 503) {
-              if (!showedRetryMsg && attempt === 0) {
-                showedRetryMsg = true;
-                setMessages(prev => [...prev, {
-                  role: 'assistant',
-                  content: 'High demand, retrying...',
-                  _temporary: true,
-                }]);
-              }
-              await new Promise(r => setTimeout(r, 2000));
-              continue;
+      // Streaming endpoint with SSE — text appears as it's generated
+      async function callGeminiStream(model, timeoutMs = 90000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const r = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
             }
-
-            const errData = await response.json().catch(() => ({}));
-            lastError = new Error(errData.error?.message || `API error: ${response.status}`);
-            break;
-          } catch (err) {
-            lastError = err;
-            break;
-          }
+          );
+          return { response: r, timer };
+        } catch (err) {
+          clearTimeout(timer);
+          throw err;
         }
       }
 
-      // Remove temporary "retrying" message
-      setMessages(prev => prev.filter(m => !m._temporary));
+      let result = null;
+      let lastError = null;
 
-      if (!response || !response.ok) {
-        throw lastError || new Error('All models failed');
+      try {
+        result = await callGeminiStream('gemini-2.0-flash');
+      } catch (err) {
+        lastError = err.name === 'AbortError' ? new Error('Request timed out — please try again') : err;
       }
 
-      const data = await response.json();
-      const assistantContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+      // One retry on 429/503 — but not if it's a hard quota error
+      if (result && result.response && (result.response.status === 429 || result.response.status === 503)) {
+        // Peek at error body to detect quota exhaustion
+        const errBody = await result.response.clone().json().catch(() => ({}));
+        const errMsg = errBody.error?.message || '';
+        const isQuotaExhausted = /quota|exceeded.*free.?tier/i.test(errMsg);
 
-      // Cache the response
-      cacheAnswer(text, assistantContent);
+        if (isQuotaExhausted) {
+          // Don't retry — quota won't recover in seconds
+          clearTimeout(result.timer);
+          throw new Error(errMsg || 'Quota exceeded');
+        }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantContent }]);
+        clearTimeout(result.timer);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'High demand, retrying...',
+          _temporary: true,
+        }]);
+        await new Promise(r => setTimeout(r, 1500));
+        try {
+          result = await callGeminiStream('gemini-2.0-flash');
+        } catch (err) {
+          lastError = err;
+        }
+        setMessages(prev => prev.filter(m => !m._temporary));
+      }
+
+      if (!result || !result.response || !result.response.ok) {
+        if (result?.timer) clearTimeout(result.timer);
+        if (result?.response) {
+          const errData = await result.response.json().catch(() => ({}));
+          lastError = new Error(errData.error?.message || `API error: ${result.response.status}`);
+        }
+        throw lastError || new Error('Request failed');
+      }
+
+      // Stream the response — append chunks to a placeholder message in real time
+      const placeholder = { role: 'assistant', content: '', _streaming: true };
+      setMessages(prev => [...prev, placeholder]);
+
+      const reader = result.response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullText = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse SSE events: lines starting with "data: "
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // keep incomplete line for next iteration
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+            try {
+              const chunk = JSON.parse(jsonStr);
+              const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) {
+                fullText += text;
+                setMessages(prev => {
+                  const updated = [...prev];
+                  const lastIdx = updated.length - 1;
+                  if (lastIdx >= 0 && updated[lastIdx]._streaming) {
+                    updated[lastIdx] = { ...updated[lastIdx], content: fullText };
+                  }
+                  return updated;
+                });
+              }
+            } catch {
+              // ignore malformed chunks
+            }
+          }
+        }
+      } finally {
+        clearTimeout(result.timer);
+      }
+
+      // Mark stream as complete and cache the result
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx]._streaming) {
+          updated[lastIdx] = { role: 'assistant', content: fullText || 'Sorry, I could not generate a response.' };
+        }
+        return updated;
+      });
+
+      if (fullText) cacheAnswer(text, fullText);
     } catch (err) {
+      // Remove any lingering temporary/streaming placeholder
+      setMessages(prev => prev.filter(m => !m._temporary && !m._streaming));
+
+      const msg = err.message || '';
+      const isQuota = /quota|exceeded|rate.?limit|429/i.test(msg);
+      const isTimeout = /timed out|timeout|abort/i.test(msg);
+
+      let friendlyMsg;
+      if (isQuota) {
+        friendlyMsg = `The AI service has hit its rate limit for the day. Please try one of these pre-built questions instead — they work instantly without using the API:
+
+• "Which zones have the worst connectivity?"
+• "Where should I deploy e-rickshaws first?"
+• "Top 10 underserved metro stations"
+• "Compare Dwarka vs Noida"
+• "How many gap zones are there?"
+• "Recommend top 5 zones for deployment"
+
+Or click any hexagon on the map to view its zone analysis directly.`;
+      } else if (isTimeout) {
+        friendlyMsg = 'The request took too long. Please try again, or use one of the suggested questions which respond instantly.';
+      } else {
+        friendlyMsg = `Couldn't reach the AI service right now. Try one of the suggested questions, or click any hexagon on the map for zone details.`;
+      }
+
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `Error: ${err.message}`,
+        content: friendlyMsg,
       }]);
     } finally {
       setLoading(false);
