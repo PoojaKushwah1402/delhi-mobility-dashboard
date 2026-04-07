@@ -99,12 +99,13 @@ export function isTransitQuery(message) {
     // Allow if it has transit keywords
     if (TRANSIT_KEYWORDS.some((kw) => lower.includes(kw))) return true;
 
-    // Allow short questions with location-like words (Delhi area names) — be permissive
-    // Common Delhi place name suffixes/patterns
-    if (/\b(pur|garh|bagh|abad|nagar|mod|mor|chowk|gate|stand|terminal|sector|sec[- ]?\d+)\b/i.test(lower)) return true;
+    // Allow if message contains common Delhi place name suffixes (pur, garh, abad, nagar, etc.)
+    // These are checked as suffixes within words, not standalone
+    if (/(pur|garh|bagh|abad|nagar|chowk|vihar|kunj|kuan|wala)\b/i.test(lower)) return true;
+    if (/\b(mod|mor|gate|stand|terminal|sector|sec[- ]?\d+|colony|market)\b/i.test(lower)) return true;
 
     // Allow questions that look like location queries even with misspellings
-    if (/\b(where|kahan|nearest|near|how far|kitna)\b/i.test(lower)) return true;
+    if (/\b(where|kahan|nearest|near|how far|kitna|kaisa|kya|mein|hain)\b/i.test(lower)) return true;
 
     return false;
 }
