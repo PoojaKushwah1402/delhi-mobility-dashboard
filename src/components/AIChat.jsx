@@ -75,8 +75,8 @@ export default function AIChat({ hexagons, selectedZone, onClose }) {
         generationConfig: { maxOutputTokens: 1000, temperature: 0.7 },
       };
 
-      // Try models in order: 2.0-flash → 1.5-flash, with one retry on 429/503
-      const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+      // Try models in order, with one retry on 429/503
+      const MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-001', 'gemini-flash-latest'];
 
       async function callGemini(model) {
         return fetch(

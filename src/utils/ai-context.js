@@ -77,9 +77,36 @@ const TRANSIT_KEYWORDS = [
     "coverage"
 ];
 
+// Off-topic patterns we definitely want to reject
+const OFF_TOPIC_PATTERNS = [
+    /\bweather\b/i, /\btemperature\b/i, /\brain\b/i,
+    /\bjoke\b/i, /\bpoem\b/i, /\bstory\b/i, /\bsong\b/i,
+    /\bpython\b/i, /\bjavascript\b/i, /\bcode\b/i, /\bscript\b/i, /\bprogramming\b/i,
+    /\bpolitics\b/i, /\belection\b/i, /\bgovernment policy\b/i,
+    /\bcricket\b/i, /\bfootball\b/i, /\bmovie\b/i, /\bbollywood\b/i,
+    /\bstock\b/i, /\bcrypto\b/i, /\bbitcoin\b/i,
+    /\brecipe\b/i, /\bcooking\b/i,
+    /\blove\b/i, /\bdating\b/i, /\bmarriage\b/i,
+];
+
 export function isTransitQuery(message) {
-    const lower = message.toLowerCase();
-    return TRANSIT_KEYWORDS.some((kw) => lower.includes(kw));
+    const lower = message.toLowerCase().trim();
+    if (!lower) return false;
+
+    // Reject if it matches an obvious off-topic pattern
+    if (OFF_TOPIC_PATTERNS.some((p) => p.test(lower))) return false;
+
+    // Allow if it has transit keywords
+    if (TRANSIT_KEYWORDS.some((kw) => lower.includes(kw))) return true;
+
+    // Allow short questions with location-like words (Delhi area names) — be permissive
+    // Common Delhi place name suffixes/patterns
+    if (/\b(pur|garh|bagh|abad|nagar|mod|mor|chowk|gate|stand|terminal|sector|sec[- ]?\d+)\b/i.test(lower)) return true;
+
+    // Allow questions that look like location queries even with misspellings
+    if (/\b(where|kahan|nearest|near|how far|kitna)\b/i.test(lower)) return true;
+
+    return false;
 }
 
 export function buildSystemPrompt(hexagons, selectedZone) {
