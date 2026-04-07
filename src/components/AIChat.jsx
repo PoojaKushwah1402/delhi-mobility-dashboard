@@ -61,8 +61,6 @@ export default function AIChat({ hexagons, selectedZone, onClose }) {
 
       // Build conversation for Gemini
       const contents = [];
-
-      // Add conversation history
       const history = [...messages.filter(m => m.role !== 'system'), userMsg];
       for (const msg of history) {
         contents.push({
@@ -71,25 +69,64 @@ export default function AIChat({ hexagons, selectedZone, onClose }) {
         });
       }
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemPrompt }] },
-            contents,
-            generationConfig: {
-              maxOutputTokens: 1000,
-              temperature: 0.7,
-            },
-          }),
-        }
-      );
+      const requestBody = {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig: { maxOutputTokens: 1000, temperature: 0.7 },
+      };
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `API error: ${response.status}`);
+      // Try models in order: 2.0-flash → 1.5-flash, with one retry on 429/503
+      const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+
+      async function callGemini(model) {
+        return fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          }
+        );
+      }
+
+      let response = null;
+      let lastError = null;
+      let showedRetryMsg = false;
+
+      outer: for (const model of MODELS) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            response = await callGemini(model);
+            if (response.ok) break outer;
+
+            if (response.status === 429 || response.status === 503) {
+              if (!showedRetryMsg && attempt === 0) {
+                showedRetryMsg = true;
+                setMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: 'High demand, retrying...',
+                  _temporary: true,
+                }]);
+              }
+              await new Promise(r => setTimeout(r, 2000));
+              continue;
+            }
+
+            const errData = await response.json().catch(() => ({}));
+            lastError = new Error(errData.error?.message || `API error: ${response.status}`);
+            break;
+          } catch (err) {
+            lastError = err;
+            break;
+          }
+        }
+      }
+
+      // Remove temporary "retrying" message
+      setMessages(prev => prev.filter(m => !m._temporary));
+
+      if (!response || !response.ok) {
+        throw lastError || new Error('All models failed');
       }
 
       const data = await response.json();

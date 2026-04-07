@@ -138,6 +138,37 @@ Laxmi Nagar is one of East Delhi's most densely populated commercial hubs, serve
 
 **E-rickshaw deployment opportunity:** In 65 metro gap zones pe focus karo — har station pe 15-20 e-rickshaws. Estimated daily ridership: 200-300 rides per station.`,
 
+  "analyze dwarka corridor": `**Dwarka Corridor — Connectivity Analysis:**
+
+The Dwarka corridor is served by the Blue Line metro (Dwarka Sec-21 to Dwarka) and the Grey Line extension toward Najafgarh.
+
+**Connectivity profile:**
+• Inner sectors (Sec 1-12) have moderate bus coverage with average zone scores of 45-55/100
+• The Blue Line stations connect Dwarka to central Delhi efficiently — 30 minute commute to Rajiv Chowk
+• Grey Line extension (Dwarka → Najafgarh → Dhansa Bus Stand) is recently operational but feeder bus connectivity is sparse
+
+**Gap zones identified:**
+• Outer Dwarka sectors (Sec 18-25) score below 50/100
+• Najafgarh peripheral zones — score as low as 25/100, transit-starved
+• Dhansa Bus Stand area — minimal feeder connectivity
+
+**Recommendation:** Deploy e-rickshaws at Dwarka Sec-21 (terminus interchange), Najafgarh, and Dhansa Bus Stand. The Grey Line extension serves a rapidly developing residential catchment with very limited bus service — high impact opportunity for last-mile coverage.`,
+
+  "top 10 underserved metro stations": `**Top 10 Underserved Metro Stations (Score 30/100, 0 bus stops in zone):**
+
+1. **Huda City Centre** (Yellow Line) — Gurgaon's primary terminus, lakhs of daily commuters
+2. **Vaishali** (Blue Line) — Ghaziabad border terminus, dense residential catchment
+3. **Chandni Chowk** (Yellow Line) — Historic commercial hub, high footfall
+4. **Badarpur Border** (Violet Line) — Faridabad gateway
+5. **Shastri Park** (Red Line) — Dense residential area in East Delhi
+6. **IFFCO Chowk** (Yellow Line) — Major Gurgaon corporate corridor
+7. **MG Road** (Yellow Line) — Gurgaon shopping/commercial hub
+8. **Yamuna Bank** (Blue Line) — Critical interchange station
+9. **Patel Nagar** (Blue Line) — Central Delhi residential
+10. **Pratap Nagar** (Red Line) — North Delhi industrial zone
+
+All 10 stations have a connectivity score of 30/100 with **zero bus stops** in their hexagon zones. Combined daily commuter footfall is estimated at 5-7 lakh people who currently rely entirely on auto-rickshaws or walking for last-mile transport. These represent the highest-priority intervention points in Delhi's transit network.`,
+
   "recommend top 5 zones for deployment": `**Top 5 Priority Zones for E-Rickshaw Deployment:**
 
 **#1 Huda City Centre (Yellow Line) — Score: 30/100**
@@ -158,23 +189,52 @@ Rapidly developing IT/residential corridor. The Aqua Line has 21 stations, most 
 **Phase 1 recommendation:** Deploy 75-100 e-rickshaws across these 5 stations. Combined estimated daily ridership: 3,600-5,300 rides. At ₹12 average fare: ₹43,000-64,000 daily revenue potential.`,
 };
 
-// Normalize question for cache lookup
+// Stop words to ignore in matching
+const STOP_WORDS = new Set(['the', 'a', 'an', 'is', 'are', 'do', 'does', 'in', 'on', 'at', 'of', 'to', 'me', 'i', 'my', 'first', 'please', 'can', 'you', 'tell', 'about', 'what', 'how', 'should']);
+
+// Normalize question for cache lookup — lowercase, trim, strip punctuation, remove stop words
 function normalizeQuestion(q) {
-  return q.toLowerCase().trim().replace(/[?!.,]+$/g, '').replace(/\s+/g, ' ');
+  return q
+    .toLowerCase()
+    .trim()
+    .replace(/[?!.,'":;]/g, '')
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .filter(w => w && !STOP_WORDS.has(w))
+    .join(' ');
 }
 
-// Find cache match — exact or fuzzy
+// Token-based similarity — what fraction of cache key tokens appear in the question
+function tokenOverlap(query, key) {
+  const qTokens = new Set(query.split(' '));
+  const kTokens = key.split(' ');
+  if (kTokens.length === 0) return 0;
+  let matches = 0;
+  for (const t of kTokens) if (qTokens.has(t)) matches++;
+  return matches / kTokens.length;
+}
+
+// Find cache match — token-based fuzzy lookup
 function findCacheMatch(question) {
   const normalized = normalizeQuestion(question);
+  if (!normalized) return null;
 
-  // Check pre-cached (exact substring match)
+  let bestMatch = null;
+  let bestScore = 0;
+
   for (const [key, answer] of Object.entries(PRE_CACHED)) {
-    if (normalized.includes(key) || key.includes(normalized)) {
-      return answer;
+    const keyNorm = normalizeQuestion(key);
+    const score = tokenOverlap(normalized, keyNorm);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = answer;
     }
   }
 
-  // Check localStorage cache
+  // Require at least 70% of key tokens to be present
+  if (bestScore >= 0.7) return bestMatch;
+
+  // Check localStorage cache (exact normalized match)
   try {
     const cached = localStorage.getItem(`ai_cache_${normalized}`);
     if (cached) return cached;
